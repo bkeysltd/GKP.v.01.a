@@ -66,7 +66,7 @@ public class MainActivity extends Activity {
         root.setBackgroundColor(Color.WHITE);
 
         TextView title = new TextView(this);
-        title.setText("GKP 07");
+        title.setText("GKP 08");
         title.setTextSize(30);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.BLACK);
@@ -117,7 +117,7 @@ public class MainActivity extends Activity {
                 ViewGroup.LayoutParams.MATCH_PARENT, dp(68)));
 
         TextView version = new TextView(this);
-        version.setText("GKP 07 v.00.b.07");
+        version.setText("GKP 08 v.00.b.08");
         version.setTextColor(Color.GRAY);
         version.setGravity(Gravity.END);
         version.setPadding(0, dp(10), 0, 0);

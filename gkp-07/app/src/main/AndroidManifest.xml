@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
-    <application
+    <queries>\n        <package android:name="com.google.android.keep" />\n    </queries>\n\n    <application
         android:allowBackup="false"
-        android:label="GKP 07"
+        android:label="GKP 08"
         android:supportsRtl="true"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
 

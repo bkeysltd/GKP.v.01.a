@@ -11,11 +11,13 @@ import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.RadioButton;
 import android.widget.RadioGroup;
+import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
@@ -31,8 +33,7 @@ import java.util.List;
 import java.util.Locale;
 
 public class MainActivity extends Activity {
-
-    private static final String VERSION = "v.00.a.00";
+    private static final String VERSION = "v.00.a.01";
     private EditText noteEdit;
     private RadioButton importantButton;
     private RadioButton veryImportantButton;
@@ -40,23 +41,58 @@ public class MainActivity extends Activity {
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        buildUi();
-        receiveSharedText(getIntent());
+        try {
+            buildUi();
+            receiveSharedText(getIntent());
+        } catch (Throwable t) {
+            showSafeScreen(t);
+        }
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        receiveSharedText(intent);
+        try {
+            receiveSharedText(intent);
+        } catch (Throwable t) {
+            Toast.makeText(this, "Share error: " + t.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
+        }
+    }
+
+    private void showSafeScreen(Throwable t) {
+        LinearLayout root = new LinearLayout(this);
+        root.setOrientation(LinearLayout.VERTICAL);
+        root.setPadding(dp(20), dp(20), dp(20), dp(20));
+        root.setBackgroundColor(Color.WHITE);
+
+        TextView title = new TextView(this);
+        title.setText("GKP — Google Keep Printer");
+        title.setTextSize(24);
+        title.setTextColor(Color.BLACK);
+        title.setTypeface(Typeface.DEFAULT_BOLD);
+        root.addView(title);
+
+        TextView msg = new TextView(this);
+        msg.setText("GKP started in safe mode.\n\nStartup error: " + t.getClass().getSimpleName() + "\n" + String.valueOf(t.getMessage()) + "\n\nVersion " + VERSION);
+        msg.setTextSize(16);
+        msg.setTextColor(Color.BLACK);
+        msg.setPadding(0, dp(16), 0, 0);
+        root.addView(msg);
+
+        setContentView(root);
     }
 
     private void buildUi() {
-        int pad = dp(18);
+        ScrollView scroll = new ScrollView(this);
+        scroll.setFillViewport(true);
+
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(pad, pad, pad, pad);
+        root.setPadding(dp(18), dp(18), dp(18), dp(18));
         root.setBackgroundColor(Color.WHITE);
+        scroll.addView(root, new ScrollView.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         TextView title = new TextView(this);
         title.setText("GKP — GOOGLE KEEP PRINTER");
@@ -66,10 +102,10 @@ public class MainActivity extends Activity {
         root.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Share a Google Keep note here. The app creates an A5 notice on the top half of A4 and sends the PDF to Telegram.");
+        sub.setText("Google Keep → Share → GKP → PDF → Telegram");
         sub.setTextSize(15);
         sub.setTextColor(Color.DKGRAY);
-        sub.setPadding(0, dp(6), 0, dp(14));
+        sub.setPadding(0, dp(6), 0, dp(12));
         root.addView(sub);
 
         RadioGroup group = new RadioGroup(this);
@@ -93,12 +129,12 @@ public class MainActivity extends Activity {
         noteEdit.setBackgroundColor(0xFFF4F4F4);
         noteEdit.setPadding(dp(12), dp(12), dp(12), dp(12));
         LinearLayout.LayoutParams editParams = new LinearLayout.LayoutParams(
-                LinearLayout.LayoutParams.MATCH_PARENT, 0, 1f);
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(300));
         editParams.setMargins(0, dp(12), 0, dp(12));
         root.addView(noteEdit, editParams);
 
         Button send = new Button(this);
-        send.setText("CREATE PDF & SEND TO TELEGRAM");
+        send.setText("CREATE PDF & SEND");
         send.setOnClickListener(v -> createAndShare());
         root.addView(send);
 
@@ -109,7 +145,7 @@ public class MainActivity extends Activity {
         version.setPadding(0, dp(12), 0, 0);
         root.addView(version);
 
-        setContentView(root);
+        setContentView(scroll);
     }
 
     private void receiveSharedText(Intent intent) {
@@ -124,7 +160,6 @@ public class MainActivity extends Activity {
         if (!TextUtils.isEmpty(subject) && !text.startsWith(subject.toString())) {
             text = subject.toString().trim() + "\n\n" + text;
         }
-
         applyPriorityMarker(text);
     }
 
@@ -149,24 +184,20 @@ public class MainActivity extends Activity {
         }
 
         String priority = veryImportantButton.isChecked() ? "VERY IMPORTANT" : "IMPORTANT";
-
         try {
             File pdf = createPdf(priority, note);
-            shareToTelegram(pdf, priority);
-        } catch (Exception e) {
-            Toast.makeText(this, "Could not create PDF: " + e.getMessage(), Toast.LENGTH_LONG).show();
+            sharePdf(pdf, priority);
+        } catch (Throwable e) {
+            Toast.makeText(this, "PDF error: " + e.getClass().getSimpleName() + " — " + e.getMessage(), Toast.LENGTH_LONG).show();
         }
     }
 
     private File createPdf(String priority, String note) throws IOException {
-        final int pageW = 595;
-        final int pageH = 842;
-        final float halfH = pageH / 2f;
-        final float margin = 24f;
+        final int pageW = 595, pageH = 842;
+        final float halfH = pageH / 2f, margin = 24f;
 
         PdfDocument doc = new PdfDocument();
-        PdfDocument.PageInfo info = new PdfDocument.PageInfo.Builder(pageW, pageH, 1).create();
-        PdfDocument.Page page = doc.startPage(info);
+        PdfDocument.Page page = doc.startPage(new PdfDocument.PageInfo.Builder(pageW, pageH, 1).create());
         Canvas canvas = page.getCanvas();
         canvas.drawColor(Color.WHITE);
 
@@ -183,7 +214,7 @@ public class MainActivity extends Activity {
 
         Paint titlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         titlePaint.setColor(Color.BLACK);
-        titlePaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.BOLD));
+        titlePaint.setTypeface(Typeface.DEFAULT_BOLD);
         titlePaint.setTextAlign(Paint.Align.CENTER);
         titlePaint.setTextSize(priority.equals("VERY IMPORTANT") ? 28f : 32f);
         canvas.drawText(priority, pageW / 2f, 72f, titlePaint);
@@ -193,16 +224,11 @@ public class MainActivity extends Activity {
         line.setStrokeWidth(1.5f);
         canvas.drawLine(margin + 28, 88, pageW - margin - 28, 88, line);
 
-        float left = margin + 28;
-        float right = pageW - margin - 28;
-        float top = 118;
-        float bottom = halfH - margin - 16;
-        float maxWidth = right - left;
-        float maxHeight = bottom - top;
+        float left = margin + 28, right = pageW - margin - 28, top = 118, bottom = halfH - margin - 16;
+        float maxWidth = right - left, maxHeight = bottom - top;
 
         Paint bodyPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         bodyPaint.setColor(Color.BLACK);
-        bodyPaint.setTypeface(Typeface.create(Typeface.DEFAULT, Typeface.NORMAL));
 
         float chosenSize = 22f;
         List<String> lines = null;
@@ -259,8 +285,7 @@ public class MainActivity extends Activity {
 
     private List<String> wrapText(String text, Paint paint, float maxWidth) {
         List<String> result = new ArrayList<>();
-        String normalized = text.replace("\r\n", "\n").replace('\r', '\n');
-        String[] paragraphs = normalized.split("\n", -1);
+        String[] paragraphs = text.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1);
         for (String paragraph : paragraphs) {
             if (paragraph.trim().isEmpty()) {
                 result.add("");
@@ -270,9 +295,8 @@ public class MainActivity extends Activity {
             String current = "";
             for (String word : words) {
                 String trial = current.isEmpty() ? word : current + " " + word;
-                if (paint.measureText(trial) <= maxWidth) {
-                    current = trial;
-                } else {
+                if (paint.measureText(trial) <= maxWidth) current = trial;
+                else {
                     if (!current.isEmpty()) result.add(current);
                     current = word;
                 }
@@ -282,9 +306,8 @@ public class MainActivity extends Activity {
         return result;
     }
 
-    private void shareToTelegram(File pdf, String priority) {
+    private void sharePdf(File pdf, String priority) {
         Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", pdf);
-
         Intent share = new Intent(Intent.ACTION_SEND);
         share.setType("application/pdf");
         share.putExtra(Intent.EXTRA_STREAM, uri);
@@ -295,7 +318,7 @@ public class MainActivity extends Activity {
         telegram.setPackage("org.telegram.messenger");
         try {
             startActivity(telegram);
-        } catch (Exception ignored) {
+        } catch (Throwable ignored) {
             startActivity(Intent.createChooser(share, "Send PDF"));
         }
     }

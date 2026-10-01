@@ -1,28 +1,38 @@
-# GKP — Google Keep Printer
+# GKP — Keep → GPT
 
-Version **v.00.a.00**
+Version **v.03.a.00**
 
-Android app for turning Google Keep notes into print-ready PDFs.
+This branch is a new direction for GKP. The old PDF/printing app remains untouched on `main`.
 
 ## Workflow
 
-Google Keep → Share → **GKP** → choose IMPORTANT / VERY IMPORTANT → CREATE PDF → share to Telegram or another app.
+Google Keep → **Share** → **GKP** → **ASK GPT** → answer shown inside GKP.
 
-## Priority markers
+GKP accepts plain text from Google Keep (including a different Google account on the same Android phone).
 
-- `!!` at the beginning → VERY IMPORTANT
-- `!` at the beginning → IMPORTANT
-- no marker → IMPORTANT
+## Security
 
-The marker is removed from the printed PDF.
+The Android app does **not** contain an OpenAI API key.
 
-## PDF layout
+It sends the note to a small HTTPS backend. The backend holds `OPENAI_API_KEY` as a server-side environment variable and calls the OpenAI Responses API.
 
-- A4 portrait page
-- notice occupies the top A5 half
-- centre cut line
-- text automatically shrinks to fit
+## First setup
 
-## Build APK on GitHub
+1. Deploy the `backend` folder to any Node.js HTTPS host.
+2. Add environment variable `OPENAI_API_KEY`.
+3. Start command: `npm start`.
+4. Copy the public HTTPS URL and add `/ask`.
+5. In GKP, paste that URL under **CONNECTION** and tap **SAVE CONNECTION**.
 
-GitHub Actions builds the APK automatically. Open **Actions → Build GKP APK → latest run → Artifacts** and download `GKP-v.00.a.00-APK`.
+## Android use
+
+1. Open a note in Google Keep.
+2. Tap **Share**.
+3. Choose **GKP**.
+4. Check/edit the text.
+5. Tap **ASK GPT**.
+6. The GPT answer appears in the app.
+
+## Build APK
+
+Open **Actions → Build GKP v.03 APK → latest run → Artifacts** and download `GKP-v.03.a.00-APK`.

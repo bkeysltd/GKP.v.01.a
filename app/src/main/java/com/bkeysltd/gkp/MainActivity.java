@@ -2,85 +2,53 @@ package com.bkeysltd.gkp;
 
 import android.app.Activity;
 import android.content.Intent;
-import android.graphics.Canvas;
+import android.content.SharedPreferences;
 import android.graphics.Color;
-import android.graphics.Paint;
 import android.graphics.Typeface;
-import android.graphics.pdf.PdfDocument;
-import android.net.Uri;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.Gravity;
+import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.LinearLayout;
-import android.widget.RadioButton;
-import android.widget.RadioGroup;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import android.widget.Toast;
 
-import androidx.core.content.FileProvider;
+import org.json.JSONObject;
 
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.IOException;
-import java.text.SimpleDateFormat;
-import java.util.ArrayList;
-import java.util.Date;
-import java.util.List;
-import java.util.Locale;
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
+import java.io.OutputStream;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 
 public class MainActivity extends Activity {
-    private static final String VERSION = "v.00.a.01";
+    private static final String VERSION = "v.03.a.00";
+    private static final String PREFS = "gkp";
+    private static final String KEY_ENDPOINT = "endpoint";
+
     private EditText noteEdit;
-    private RadioButton importantButton;
-    private RadioButton veryImportantButton;
+    private EditText endpointEdit;
+    private TextView answerView;
+    private Button askButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
-        try {
-            buildUi();
-            receiveSharedText(getIntent());
-        } catch (Throwable t) {
-            showSafeScreen(t);
-        }
+        buildUi();
+        receiveSharedText(getIntent());
     }
 
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         setIntent(intent);
-        try {
-            receiveSharedText(intent);
-        } catch (Throwable t) {
-            Toast.makeText(this, "Share error: " + t.getClass().getSimpleName(), Toast.LENGTH_LONG).show();
-        }
-    }
-
-    private void showSafeScreen(Throwable t) {
-        LinearLayout root = new LinearLayout(this);
-        root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(20), dp(20), dp(20), dp(20));
-        root.setBackgroundColor(Color.WHITE);
-
-        TextView title = new TextView(this);
-        title.setText("GKP — Google Keep Printer");
-        title.setTextSize(24);
-        title.setTextColor(Color.BLACK);
-        title.setTypeface(Typeface.DEFAULT_BOLD);
-        root.addView(title);
-
-        TextView msg = new TextView(this);
-        msg.setText("GKP started in safe mode.\n\nStartup error: " + t.getClass().getSimpleName() + "\n" + String.valueOf(t.getMessage()) + "\n\nVersion " + VERSION);
-        msg.setTextSize(16);
-        msg.setTextColor(Color.BLACK);
-        msg.setPadding(0, dp(16), 0, 0);
-        root.addView(msg);
-
-        setContentView(root);
+        receiveSharedText(intent);
     }
 
     private void buildUi() {
@@ -89,60 +57,94 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setPadding(dp(18), dp(18), dp(18), dp(18));
+        root.setPadding(dp(18), dp(18), dp(18), dp(24));
         root.setBackgroundColor(Color.WHITE);
         scroll.addView(root, new ScrollView.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT));
 
         TextView title = new TextView(this);
-        title.setText("GKP — GOOGLE KEEP PRINTER");
-        title.setTextSize(24);
+        title.setText("GKP — KEEP → GPT");
+        title.setTextSize(26);
         title.setTypeface(Typeface.DEFAULT_BOLD);
         title.setTextColor(Color.BLACK);
         root.addView(title);
 
         TextView sub = new TextView(this);
-        sub.setText("Google Keep → Share → GKP → PDF → Telegram");
+        sub.setText("Google Keep → Share → GKP → ASK GPT");
         sub.setTextSize(15);
         sub.setTextColor(Color.DKGRAY);
-        sub.setPadding(0, dp(6), 0, dp(12));
+        sub.setPadding(0, dp(6), 0, dp(14));
         root.addView(sub);
 
-        RadioGroup group = new RadioGroup(this);
-        group.setOrientation(RadioGroup.HORIZONTAL);
-
-        importantButton = new RadioButton(this);
-        importantButton.setText("IMPORTANT");
-        importantButton.setChecked(true);
-        group.addView(importantButton);
-
-        veryImportantButton = new RadioButton(this);
-        veryImportantButton.setText("VERY IMPORTANT");
-        group.addView(veryImportantButton);
-        root.addView(group);
-
         noteEdit = new EditText(this);
-        noteEdit.setHint("Google Keep note...");
+        noteEdit.setHint("Share a Google Keep note here, or type/paste text...");
         noteEdit.setGravity(Gravity.TOP | Gravity.START);
         noteEdit.setTextSize(18);
-        noteEdit.setMinLines(10);
-        noteEdit.setBackgroundColor(0xFFF4F4F4);
+        noteEdit.setMinLines(7);
+        noteEdit.setBackgroundColor(0xFFF3F3F3);
         noteEdit.setPadding(dp(12), dp(12), dp(12), dp(12));
-        LinearLayout.LayoutParams editParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.MATCH_PARENT, dp(300));
-        editParams.setMargins(0, dp(12), 0, dp(12));
-        root.addView(noteEdit, editParams);
+        root.addView(noteEdit, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, dp(240)));
 
-        Button send = new Button(this);
-        send.setText("CREATE PDF & SEND");
-        send.setOnClickListener(v -> createAndShare());
-        root.addView(send);
+        askButton = new Button(this);
+        askButton.setText("ASK GPT");
+        LinearLayout.LayoutParams bp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        bp.setMargins(0, dp(12), 0, dp(12));
+        root.addView(askButton, bp);
+        askButton.setOnClickListener(v -> askGpt());
+
+        TextView answerLabel = new TextView(this);
+        answerLabel.setText("GPT ANSWER");
+        answerLabel.setTypeface(Typeface.DEFAULT_BOLD);
+        answerLabel.setTextColor(Color.BLACK);
+        root.addView(answerLabel);
+
+        answerView = new TextView(this);
+        answerView.setText("The answer will appear here.");
+        answerView.setTextSize(17);
+        answerView.setTextColor(Color.BLACK);
+        answerView.setBackgroundColor(0xFFF7F7F7);
+        answerView.setPadding(dp(12), dp(12), dp(12), dp(12));
+        answerView.setTextIsSelectable(true);
+        LinearLayout.LayoutParams ap = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        ap.setMargins(0, dp(6), 0, dp(18));
+        root.addView(answerView, ap);
+
+        TextView settingsTitle = new TextView(this);
+        settingsTitle.setText("CONNECTION");
+        settingsTitle.setTypeface(Typeface.DEFAULT_BOLD);
+        settingsTitle.setTextColor(Color.BLACK);
+        root.addView(settingsTitle);
+
+        endpointEdit = new EditText(this);
+        endpointEdit.setHint("https://your-server.example.com/ask");
+        endpointEdit.setSingleLine(true);
+        endpointEdit.setText(loadEndpoint());
+        root.addView(endpointEdit);
+
+        Button save = new Button(this);
+        save.setText("SAVE CONNECTION");
+        save.setOnClickListener(v -> {
+            String endpoint = endpointEdit.getText().toString().trim();
+            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_ENDPOINT, endpoint).apply();
+            Toast.makeText(this, "Connection saved.", Toast.LENGTH_SHORT).show();
+        });
+        root.addView(save);
+
+        TextView note = new TextView(this);
+        note.setText("No OpenAI API key is stored in this APK. The key stays on your server.");
+        note.setTextSize(13);
+        note.setTextColor(Color.GRAY);
+        note.setPadding(0, dp(10), 0, 0);
+        root.addView(note);
 
         TextView version = new TextView(this);
         version.setText("GKP " + VERSION);
         version.setGravity(Gravity.END);
         version.setTextColor(Color.GRAY);
-        version.setPadding(0, dp(12), 0, 0);
+        version.setPadding(0, dp(14), 0, 0);
         root.addView(version);
 
         setContentView(scroll);
@@ -155,172 +157,88 @@ public class MainActivity extends Activity {
 
         CharSequence shared = intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
         CharSequence subject = intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT);
-        String text = shared == null ? "" : shared.toString().trim();
 
+        String text = shared == null ? "" : shared.toString().trim();
         if (!TextUtils.isEmpty(subject) && !text.startsWith(subject.toString())) {
             text = subject.toString().trim() + "\n\n" + text;
         }
-        applyPriorityMarker(text);
-    }
-
-    private void applyPriorityMarker(String raw) {
-        String t = raw == null ? "" : raw.trim();
-        if (t.startsWith("!!")) {
-            veryImportantButton.setChecked(true);
-            t = t.substring(2).trim();
-        } else if (t.startsWith("!")) {
-            importantButton.setChecked(true);
-            t = t.substring(1).trim();
-        }
-        noteEdit.setText(t);
+        noteEdit.setText(text);
         noteEdit.setSelection(noteEdit.getText().length());
     }
 
-    private void createAndShare() {
-        String note = noteEdit.getText().toString().trim();
-        if (note.isEmpty()) {
-            Toast.makeText(this, "The note is empty.", Toast.LENGTH_SHORT).show();
+    private String loadEndpoint() {
+        return getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_ENDPOINT, "");
+    }
+
+    private void askGpt() {
+        String text = noteEdit.getText().toString().trim();
+        String endpoint = endpointEdit.getText().toString().trim();
+
+        if (text.isEmpty()) {
+            Toast.makeText(this, "There is no text to send.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if (endpoint.isEmpty()) {
+            Toast.makeText(this, "Set the connection URL first.", Toast.LENGTH_LONG).show();
+            endpointEdit.requestFocus();
             return;
         }
 
-        String priority = veryImportantButton.isChecked() ? "VERY IMPORTANT" : "IMPORTANT";
-        try {
-            File pdf = createPdf(priority, note);
-            sharePdf(pdf, priority);
-        } catch (Throwable e) {
-            Toast.makeText(this, "PDF error: " + e.getClass().getSimpleName() + " — " + e.getMessage(), Toast.LENGTH_LONG).show();
-        }
+        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_ENDPOINT, endpoint).apply();
+        askButton.setEnabled(false);
+        askButton.setText("SENDING...");
+        answerView.setText("Working...");
+
+        new Thread(() -> {
+            try {
+                String answer = callBackend(endpoint, text);
+                runOnUiThread(() -> {
+                    answerView.setText(answer);
+                    askButton.setEnabled(true);
+                    askButton.setText("ASK GPT");
+                });
+            } catch (Exception e) {
+                runOnUiThread(() -> {
+                    answerView.setText("Connection error: " + e.getMessage());
+                    askButton.setEnabled(true);
+                    askButton.setText("ASK GPT");
+                });
+            }
+        }).start();
     }
 
-    private File createPdf(String priority, String note) throws IOException {
-        final int pageW = 595, pageH = 842;
-        final float halfH = pageH / 2f, margin = 24f;
+    private String callBackend(String endpoint, String text) throws Exception {
+        HttpURLConnection c = (HttpURLConnection) new URL(endpoint).openConnection();
+        c.setRequestMethod("POST");
+        c.setConnectTimeout(20000);
+        c.setReadTimeout(90000);
+        c.setDoOutput(true);
+        c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+        c.setRequestProperty("Accept", "application/json");
 
-        PdfDocument doc = new PdfDocument();
-        PdfDocument.Page page = doc.startPage(new PdfDocument.PageInfo.Builder(pageW, pageH, 1).create());
-        Canvas canvas = page.getCanvas();
-        canvas.drawColor(Color.WHITE);
+        JSONObject req = new JSONObject();
+        req.put("text", text);
 
-        Paint border = new Paint(Paint.ANTI_ALIAS_FLAG);
-        border.setStyle(Paint.Style.STROKE);
-        border.setStrokeWidth(2f);
-        border.setColor(Color.BLACK);
-        canvas.drawRect(margin, margin, pageW - margin, halfH - margin, border);
-
-        Paint guide = new Paint(Paint.ANTI_ALIAS_FLAG);
-        guide.setColor(Color.LTGRAY);
-        guide.setStrokeWidth(1f);
-        canvas.drawLine(0, halfH, pageW, halfH, guide);
-
-        Paint titlePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        titlePaint.setColor(Color.BLACK);
-        titlePaint.setTypeface(Typeface.DEFAULT_BOLD);
-        titlePaint.setTextAlign(Paint.Align.CENTER);
-        titlePaint.setTextSize(priority.equals("VERY IMPORTANT") ? 28f : 32f);
-        canvas.drawText(priority, pageW / 2f, 72f, titlePaint);
-
-        Paint line = new Paint(Paint.ANTI_ALIAS_FLAG);
-        line.setColor(Color.BLACK);
-        line.setStrokeWidth(1.5f);
-        canvas.drawLine(margin + 28, 88, pageW - margin - 28, 88, line);
-
-        float left = margin + 28, right = pageW - margin - 28, top = 118, bottom = halfH - margin - 16;
-        float maxWidth = right - left, maxHeight = bottom - top;
-
-        Paint bodyPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        bodyPaint.setColor(Color.BLACK);
-
-        float chosenSize = 22f;
-        List<String> lines = null;
-        for (float size = 22f; size >= 10f; size -= 1f) {
-            bodyPaint.setTextSize(size);
-            List<String> test = wrapText(note, bodyPaint, maxWidth);
-            float leading = size * 1.28f;
-            if (test.size() * leading <= maxHeight) {
-                chosenSize = size;
-                lines = test;
-                break;
-            }
-        }
-        if (lines == null) {
-            chosenSize = 10f;
-            bodyPaint.setTextSize(chosenSize);
-            lines = wrapText(note, bodyPaint, maxWidth);
+        byte[] body = req.toString().getBytes(StandardCharsets.UTF_8);
+        try (OutputStream out = c.getOutputStream()) {
+            out.write(body);
         }
 
-        bodyPaint.setTextSize(chosenSize);
-        float leading = chosenSize * 1.28f;
-        int maxLines = Math.max(1, (int) (maxHeight / leading));
-        if (lines.size() > maxLines) {
-            lines = new ArrayList<>(lines.subList(0, maxLines));
-            int last = lines.size() - 1;
-            lines.set(last, lines.get(last) + "…");
+        int code = c.getResponseCode();
+        InputStream stream = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
+        StringBuilder response = new StringBuilder();
+        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = reader.readLine()) != null) response.append(line);
         }
 
-        float y = top;
-        for (String s : lines) {
-            canvas.drawText(s, left, y, bodyPaint);
-            y += leading;
+        JSONObject obj = new JSONObject(response.toString());
+        if (code < 200 || code >= 300) {
+            throw new Exception(obj.optString("error", "Server returned HTTP " + code));
         }
-
-        Paint versionPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-        versionPaint.setColor(Color.GRAY);
-        versionPaint.setTextSize(7f);
-        versionPaint.setTextAlign(Paint.Align.RIGHT);
-        canvas.drawText("GKP " + VERSION, pageW - margin, halfH - 8, versionPaint);
-
-        doc.finishPage(page);
-
-        File dir = new File(getCacheDir(), "pdf");
-        if (!dir.exists() && !dir.mkdirs()) throw new IOException("Cannot create PDF folder");
-        String stamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(new Date());
-        File file = new File(dir, "GKP_" + priority.replace(' ', '_') + "_" + stamp + ".pdf");
-        try (FileOutputStream out = new FileOutputStream(file)) {
-            doc.writeTo(out);
-        } finally {
-            doc.close();
-        }
-        return file;
-    }
-
-    private List<String> wrapText(String text, Paint paint, float maxWidth) {
-        List<String> result = new ArrayList<>();
-        String[] paragraphs = text.replace("\r\n", "\n").replace('\r', '\n').split("\n", -1);
-        for (String paragraph : paragraphs) {
-            if (paragraph.trim().isEmpty()) {
-                result.add("");
-                continue;
-            }
-            String[] words = paragraph.trim().split("\\s+");
-            String current = "";
-            for (String word : words) {
-                String trial = current.isEmpty() ? word : current + " " + word;
-                if (paint.measureText(trial) <= maxWidth) current = trial;
-                else {
-                    if (!current.isEmpty()) result.add(current);
-                    current = word;
-                }
-            }
-            if (!current.isEmpty()) result.add(current);
-        }
-        return result;
-    }
-
-    private void sharePdf(File pdf, String priority) {
-        Uri uri = FileProvider.getUriForFile(this, getPackageName() + ".fileprovider", pdf);
-        Intent share = new Intent(Intent.ACTION_SEND);
-        share.setType("application/pdf");
-        share.putExtra(Intent.EXTRA_STREAM, uri);
-        share.putExtra(Intent.EXTRA_TEXT, priority);
-        share.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-
-        Intent telegram = new Intent(share);
-        telegram.setPackage("org.telegram.messenger");
-        try {
-            startActivity(telegram);
-        } catch (Throwable ignored) {
-            startActivity(Intent.createChooser(share, "Send PDF"));
-        }
+        String answer = obj.optString("answer", "");
+        if (answer.isEmpty()) throw new Exception("No answer returned.");
+        return answer;
     }
 
     private int dp(int value) {

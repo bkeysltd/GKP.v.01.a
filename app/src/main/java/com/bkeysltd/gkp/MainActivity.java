@@ -6,9 +6,9 @@ import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
+import android.text.InputType;
 import android.text.TextUtils;
 import android.view.Gravity;
-import android.view.View;
 import android.view.ViewGroup;
 import android.widget.Button;
 import android.widget.EditText;
@@ -31,9 +31,11 @@ public class MainActivity extends Activity {
     private static final String VERSION = "v.03.a.00";
     private static final String PREFS = "gkp";
     private static final String KEY_ENDPOINT = "endpoint";
+    private static final String KEY_APP_TOKEN = "app_token";
 
     private EditText noteEdit;
     private EditText endpointEdit;
+    private EditText tokenEdit;
     private TextView answerView;
     private Button askButton;
 
@@ -121,20 +123,29 @@ public class MainActivity extends Activity {
         endpointEdit = new EditText(this);
         endpointEdit.setHint("https://your-server.example.com/ask");
         endpointEdit.setSingleLine(true);
-        endpointEdit.setText(loadEndpoint());
+        endpointEdit.setText(load(KEY_ENDPOINT));
         root.addView(endpointEdit);
+
+        tokenEdit = new EditText(this);
+        tokenEdit.setHint("GKP app token");
+        tokenEdit.setSingleLine(true);
+        tokenEdit.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
+        tokenEdit.setText(load(KEY_APP_TOKEN));
+        root.addView(tokenEdit);
 
         Button save = new Button(this);
         save.setText("SAVE CONNECTION");
         save.setOnClickListener(v -> {
-            String endpoint = endpointEdit.getText().toString().trim();
-            getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_ENDPOINT, endpoint).apply();
+            SharedPreferences.Editor editor = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
+            editor.putString(KEY_ENDPOINT, endpointEdit.getText().toString().trim());
+            editor.putString(KEY_APP_TOKEN, tokenEdit.getText().toString());
+            editor.apply();
             Toast.makeText(this, "Connection saved.", Toast.LENGTH_SHORT).show();
         });
         root.addView(save);
 
         TextView note = new TextView(this);
-        note.setText("No OpenAI API key is stored in this APK. The key stays on your server.");
+        note.setText("The OpenAI API key is never stored in this APK. The app token can be rotated if needed.");
         note.setTextSize(13);
         note.setTextColor(Color.GRAY);
         note.setPadding(0, dp(10), 0, 0);
@@ -166,32 +177,36 @@ public class MainActivity extends Activity {
         noteEdit.setSelection(noteEdit.getText().length());
     }
 
-    private String loadEndpoint() {
-        return getSharedPreferences(PREFS, MODE_PRIVATE).getString(KEY_ENDPOINT, "");
+    private String load(String key) {
+        return getSharedPreferences(PREFS, MODE_PRIVATE).getString(key, "");
     }
 
     private void askGpt() {
         String text = noteEdit.getText().toString().trim();
         String endpoint = endpointEdit.getText().toString().trim();
+        String token = tokenEdit.getText().toString();
 
         if (text.isEmpty()) {
             Toast.makeText(this, "There is no text to send.", Toast.LENGTH_SHORT).show();
             return;
         }
-        if (endpoint.isEmpty()) {
-            Toast.makeText(this, "Set the connection URL first.", Toast.LENGTH_LONG).show();
-            endpointEdit.requestFocus();
+        if (endpoint.isEmpty() || token.isEmpty()) {
+            Toast.makeText(this, "Set the connection URL and app token first.", Toast.LENGTH_LONG).show();
             return;
         }
 
-        getSharedPreferences(PREFS, MODE_PRIVATE).edit().putString(KEY_ENDPOINT, endpoint).apply();
+        SharedPreferences.Editor editor = getSharedPreferences(PREFS, MODE_PRIVATE).edit();
+        editor.putString(KEY_ENDPOINT, endpoint);
+        editor.putString(KEY_APP_TOKEN, token);
+        editor.apply();
+
         askButton.setEnabled(false);
         askButton.setText("SENDING...");
         answerView.setText("Working...");
 
         new Thread(() -> {
             try {
-                String answer = callBackend(endpoint, text);
+                String answer = callBackend(endpoint, token, text);
                 runOnUiThread(() -> {
                     answerView.setText(answer);
                     askButton.setEnabled(true);
@@ -207,7 +222,7 @@ public class MainActivity extends Activity {
         }).start();
     }
 
-    private String callBackend(String endpoint, String text) throws Exception {
+    private String callBackend(String endpoint, String token, String text) throws Exception {
         HttpURLConnection c = (HttpURLConnection) new URL(endpoint).openConnection();
         c.setRequestMethod("POST");
         c.setConnectTimeout(20000);
@@ -215,6 +230,7 @@ public class MainActivity extends Activity {
         c.setDoOutput(true);
         c.setRequestProperty("Content-Type", "application/json; charset=utf-8");
         c.setRequestProperty("Accept", "application/json");
+        c.setRequestProperty("Authorization", "Bearer " + token);
 
         JSONObject req = new JSONObject();
         req.put("text", text);
@@ -227,12 +243,14 @@ public class MainActivity extends Activity {
         int code = c.getResponseCode();
         InputStream stream = code >= 200 && code < 300 ? c.getInputStream() : c.getErrorStream();
         StringBuilder response = new StringBuilder();
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = reader.readLine()) != null) response.append(line);
+        if (stream != null) {
+            try (BufferedReader reader = new BufferedReader(new InputStreamReader(stream, StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = reader.readLine()) != null) response.append(line);
+            }
         }
 
-        JSONObject obj = new JSONObject(response.toString());
+        JSONObject obj = response.length() == 0 ? new JSONObject() : new JSONObject(response.toString());
         if (code < 200 || code >= 300) {
             throw new Exception(obj.optString("error", "Server returned HTTP " + code));
         }

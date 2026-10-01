@@ -10,8 +10,8 @@ android {
         applicationId = "com.bkeysltd.gkp"
         minSdk = 24
         targetSdk = 35
-        versionCode = 40
-        versionName = "0.04.a.00"
+        versionCode = 41
+        versionName = "0.04.a.01"
     }
 
     compileOptions {

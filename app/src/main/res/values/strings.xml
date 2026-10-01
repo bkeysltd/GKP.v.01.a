@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">GKP</string>
+    <string name="accessibility_service_description">Allows GKP to read only the text currently visible in Google Keep so it can be checked with GPT.</string>
 </resources>

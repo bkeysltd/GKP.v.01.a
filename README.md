@@ -1,38 +1,24 @@
-# GKP — Keep → GPT
+# GKP — Visible Keep → GPT
 
-Version **v.03.a.00**
+Version **v.04.a.00**
 
-This branch is a new direction for GKP. The old PDF/printing app remains untouched on `main`.
+This branch changes GKP so the user does not need to copy, paste, share, or save a Google Keep note into GKP.
 
 ## Workflow
 
-Google Keep → **Share** → **GKP** → **ASK GPT** → answer shown inside GKP.
+1. Enable GKP under Android **Accessibility** once.
+2. Open Google Keep and open the note.
+3. GKP reads only text currently visible in the Google Keep window.
+4. Return to GKP.
+5. Tap **CHECK VISIBLE NOTE WITH GPT**.
+6. GPT's answer appears inside GKP.
 
-GKP accepts plain text from Google Keep (including a different Google account on the same Android phone).
+The accessibility service is restricted in its Android configuration to the Google Keep package `com.google.android.keep`.
 
-## Security
+## GPT connection
 
-The Android app does **not** contain an OpenAI API key.
-
-It sends the note to a small HTTPS backend. The backend holds `OPENAI_API_KEY` as a server-side environment variable and calls the OpenAI Responses API.
-
-## First setup
-
-1. Deploy the `backend` folder to any Node.js HTTPS host.
-2. Add environment variable `OPENAI_API_KEY`.
-3. Start command: `npm start`.
-4. Copy the public HTTPS URL and add `/ask`.
-5. In GKP, paste that URL under **CONNECTION** and tap **SAVE CONNECTION**.
-
-## Android use
-
-1. Open a note in Google Keep.
-2. Tap **Share**.
-3. Choose **GKP**.
-4. Check/edit the text.
-5. Tap **ASK GPT**.
-6. The GPT answer appears in the app.
+The OpenAI API key is not stored in the Android APK. GKP connects to the secure backend already included in this repository.
 
 ## Build APK
 
-Open **Actions → Build GKP v.03 APK → latest run → Artifacts** and download `GKP-v.03.a.00-APK`.
+Open **Actions → Build GKP v.04 APK → latest run → Artifacts** and download `GKP-v.04.a.00-APK`.
